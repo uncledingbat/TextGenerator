@@ -17,6 +17,7 @@ except ImportError as e:
     print(str(e) + ': ' + error)
     sys.exit()
 
+
 """
 Read csv file, delete special characters and return reviews
     Args
@@ -27,7 +28,7 @@ Read csv file, delete special characters and return reviews
         words: all words in the dataset
         reviews: all reviews in the dataset
 """
-def read_data(file_path, sc_path, segmentation=True):
+def read_data(file_path, sw_path=None, segmentation=True):
     # Python 3.x
     with open(file_path, 'r', encoding='utf-8') as f:
         incsv = csv.reader(f)
@@ -35,17 +36,19 @@ def read_data(file_path, sc_path, segmentation=True):
         id = headers.index('content')
 
         reviews = list()  # A list of reviews
-        sc = special_char(sc_path)  # A list of special characters
+        if sw_path:
+            sw = _stop_words(sw_path)
         words = list()  # A list of all the words from reviews
         for line in incsv:
-            sent = tradition_2_simple(line[id].strip())  # Convert traditional chinese to simplified chinese
-            sent = clean_data(sent, sc)  # Delete special characters using custom dictionary
+            sent = _tradition_2_simple(line[id].strip())  # Convert traditional chinese to simplified chinese
+            if sw_path:
+                sent = _clean_data(sent, sw)  # Delete special characters using custom dictionary
 
             if len(sent) <= 1:
                 continue
 
             if segmentation:
-                words_list = word_segmentation(sent)
+                words_list = _word_segmentation(sent)
                 words.extend(words_list)
                 reviews.append(words_list)
             else:
@@ -65,7 +68,7 @@ Build dataset for later usage
         w_2_idx: Words to indices
         idx_2_w: Indices to words
 """
-def build_dataset(file_path, sc_path, segmentation=True, n_words=10000):
+def build_dataset(file_path, sc_path, segmentation=True, n_words=20000):
     start = time.time()
     print('Building dataset ...')
 
@@ -108,27 +111,32 @@ def build_dataset(file_path, sc_path, segmentation=True, n_words=10000):
 
     return data, count, w_2_idx, idx_2_w
 
+# --------------- Private Methods ---------------
 
 # Convert Traditional Chinese to Simplified Chinese
-def tradition_2_simple(sent):
+def _tradition_2_simple(sent):
     return langconv.Converter('zh-hans').convert(sent)
 
 
-def word_segmentation(sent):
+def _word_segmentation(sent):
     return list(jieba.cut(sent, cut_all=False, HMM=True))
 
 
-def special_char(path):
+def _stop_words(path):
     with open(path, 'r', encoding='utf-8') as f:
-        sc = list()
+        sw = list()
         for line in f:
-            sc.append(line.strip())
+            sw.append(line.strip())
 
-        return sc
+    return sw
 
 
-# Delete special characters using custom dictionary
-def clean_data(sent, sc):
+# Delete stop words using custom dictionary
+def _clean_data(sent, sc):
     sent = re.sub('\s+', '', sent)
+    sent = re.sub('！+', '！', sent)
+    sent = re.sub('。+', '。', sent)
+    sent = re.sub('，+', '，', sent)
     sent = "".join([word for word in sent if word not in sc])
+
     return sent
