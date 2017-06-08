@@ -22,7 +22,7 @@ except ImportError as e:
 Read csv file, delete special characters and return reviews
     Args
         file_path: data file path
-        sc_path: special character file path
+        sw_path: special character file path
         segmentation: determine to implement word segmentation or not
     Return
         words: all words in the dataset
@@ -68,11 +68,11 @@ Build dataset for later usage
         w_2_idx: Words to indices
         idx_2_w: Indices to words
 """
-def build_dataset(file_path, sc_path, segmentation=True, n_words=20000):
+def build_dataset(file_path, sw_path, segmentation=True, n_words=20000):
     start = time.time()
     print('Building dataset ...')
 
-    words, sentences = read_data(file_path, sc_path, segmentation)
+    words, sentences = read_data(file_path, sw_path, segmentation)
 
     count = [['UNK', -1]]
     count.extend(collections.Counter(words).most_common(n_words - 1))
@@ -128,15 +128,16 @@ def _stop_words(path):
         for line in f:
             sw.append(line.strip())
 
-    return sw
+    return set(sw)
 
 
 # Delete stop words using custom dictionary
-def _clean_data(sent, sc):
+def _clean_data(sent, sw):
     sent = re.sub('\s+', '', sent)
     sent = re.sub('！+', '！', sent)
+    sent = re.sub('？+', '！', sent)
     sent = re.sub('。+', '。', sent)
     sent = re.sub('，+', '，', sent)
-    sent = "".join([word for word in sent if word not in sc])
+    sent = "".join([word for word in sent if word not in sw])
 
     return sent
