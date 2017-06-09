@@ -99,14 +99,15 @@ def build_dataset(file_path, sw_path, segmentation=True, n_words=20000):
     end = time.time()
     runtime = end - start
 
+    print('Dataset has been built successfully.')
+    print('Run time: ', runtime)
     print('--------- Summary of the Dataset ---------')
-    print('Number of words: ', len(w_2_idx.keys()))
+    print('Number of different words: ', len(w_2_idx.keys()))
     print('Number of sentences: ', len(data))
     print('Data sample: ', data[:2])
     print('Most common 10 words: ', count[:10])
     print('Words to indices: ', sorted(w_2_idx.items(), key=lambda x: x[1])[:5])
     print('Indices to words: ', sorted(idx_2_w.items(), key=lambda x: x[0])[:5])
-    print('Run time: ', runtime)
     print('-------------------------------------------')
 
     return data, count, w_2_idx, idx_2_w
