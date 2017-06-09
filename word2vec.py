@@ -4,6 +4,7 @@ import math
 import time
 import os
 import random
+import pickle as pkl
 
 import tensorflow as tf
 import numpy as np
@@ -15,7 +16,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 """
 Implement skip gram word2vec
-    args
+    Args
         file_path: data file path
         sw_path: stop words file path
         vocab_size: the number of different words
@@ -29,41 +30,49 @@ Implement skip gram word2vec
 """
 class word2vec(object):
     def __init__(self,
-                 file_path,
-                 sw_path=None,
-                 vocab_size=30000,
-                 embedding_size=200,
-                 batch_size=1,
-                 skip_window=2,
-                 learning_rate=0.1,
-                 num_sampled=100,
-                 train_steps=100000,
-                 segmentation=True
+                 file_path,  # str
+                 sw_path=None,  # str
+                 model_path=None,  # str
+                 vocab_size=30000,  # int
+                 embedding_size=200,  # int
+                 batch_size=1,  # int
+                 skip_window=2,  # int
+                 learning_rate=0.1,  # float
+                 num_sampled=100,  # int
+                 train_steps=100000,  # int
+                 segmentation=True  # boolean
                  ):
         # Parameters
-        self.batch_size = None
-        self.embedding_size = embedding_size
-        self.skip_window = skip_window
-        self.learning_rate = learning_rate
-        self.vocab_size = vocab_size
-        self.num_sampled = num_sampled
-        self.train_steps = train_steps
-        self.batch_size = batch_size
+        if model_path is not None:
+            self.load_model(model_path)
+        else:
+            self.embedding_size = embedding_size
+            self.skip_window = skip_window
+            self.learning_rate = learning_rate
+            self.vocab_size = vocab_size
+            self.num_sampled = num_sampled
+            self.train_steps = train_steps
+            self.batch_size = batch_size
 
         # data: sentences represented by word indices
         # count: word counts
         # w_2_idx: word to index
         # idx_2_w: index to word
+        if not os.path.exists(file_path):
+            raise RuntimeError('file not exists')
+
         self.data, self.count, self.w_2_idx, self.idx_2_w = build_dataset(file_path,
                                                                           sw_path,
                                                                           segmentation=segmentation,
                                                                           n_words=self.vocab_size)
 
+        # Update vocabulary size
+        self.vocab_size = min(self.vocab_size, len(self.count))
+
         # train records
         self.max_len = 1000
         self.loss_records = collections.deque(maxlen=self.max_len)
         self.num_steps = 0
-        self.num_sentences = 0
 
         # test data
         # words, _ = zip(*random.sample(self.count, 10))
@@ -79,9 +88,7 @@ class word2vec(object):
             self.train_inputs = tf.placeholder(tf.int32, shape=[None])
             self.train_labels = tf.placeholder(tf.int32, shape=[None, 1])
 
-            self.embeddings = tf.Variable(tf.random_uniform([min(len(self.count), self.vocab_size),
-                                                             self.embedding_size],
-                                                            -1.0, 1.0))
+            self.embeddings = tf.Variable(tf.random_uniform([self.vocab_size, self.embedding_size], -1.0, 1.0))
             embed = tf.nn.embedding_lookup(self.embeddings, self.train_inputs)
 
             # NCE parameters
@@ -111,6 +118,7 @@ class word2vec(object):
 
             # Initialization
             self.init = tf.global_variables_initializer()
+
             self.saver = tf.train.Saver()
 
     def initializer(self):
@@ -150,8 +158,8 @@ class word2vec(object):
         self.num_steps += 1
 
         if self.num_steps % self.max_len == 0:
-            average_loss = np.mean(self.loss_records)
-            print('Average loss at step', self.num_steps, ': ', average_loss)
+            self.average_loss = np.mean(self.loss_records)
+            print('Average loss at step', self.num_steps, ': ', self.average_loss)
 
         if self.num_steps % 2000 == 0:
             self.cal_similarity()
@@ -180,8 +188,54 @@ class word2vec(object):
                 index %= len(self.data)
             self.train(raw_input=raw_input)
         end = time.time()
+        print('Training done.')
         print('Run time: ', end - start)
 
+        final_embeddings = self.normalized_embeddings.eval(session=self.sess)
+        return final_embeddings
+
+    def save_model(self, save_path):
+        if not os.path.exists(save_path):
+            os.mkdir(save_path)
+
+        # Save parameters
+        model = {}
+        var_names = ['vocab_size',
+                     'embedding_size',
+                     'batch_size',
+                     'skip_windows',
+                     'learning_rate',
+                     'num_sampled',
+                     'train_steps']
+        for var in var_names:
+            model[var] = eval('self.' + var)
+
+        params_path = os.path.join(save_path, 'params.pkl')
+        if os.path.exists(params_path):
+            os.remove(params_path)
+        with open(params_path, 'wb') as f:
+            pkl.dump(model, f)
+
+        # Save word2vec model
+        model_path = os.path.join(save_path, 'word2vec_vars')
+        if os.path.exists(model_path):
+            os.remove(model_path)
+
+        self.saver.save(self.sess, model_path)
+
+    def load_model(self, model_path):
+        if not os.path.exists(model_path):
+            raise RuntimeError('Model not exists')
+
+        with open(model_path, 'r', encoding='utf-8') as f:
+            model = pkl.load(f)
+            self.vocab_size = model['vocab_size']
+            self.embedding_size = model['embedding_size']
+            self.batch_size = model['batch_size']
+            self.skip_window = model['skip_window']
+            self.learning_rate = model['learning_rate']
+            self.num_sampled = model['num_sampled']
+            self.train_steps = model['train_steps']
 
 # loss: 7.70
 config_1 = {'batch_size': 1, 'train_steps': 100000}
@@ -205,4 +259,6 @@ w2v = word2vec(file_path='1.csv',
                train_steps=200000,
                segmentation=True)
 
-w2v.run_epoch()
+final_embeddings = w2v.run_epoch()
+print(final_embeddings.shape)
+w2v.save_model(save_path='model')
