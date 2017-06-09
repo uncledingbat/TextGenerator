@@ -75,8 +75,8 @@ class word2vec(object):
         self.num_steps = 0
 
         # test data
-        # words, _ = zip(*random.sample(self.count, 10))
-        words = ['烂', '影片', '恶心', '难看', '杨幂']
+        words, _ = zip(*random.sample(self.count, 10))
+        # words = ['烂', '影片', '恶心', '难看', '杨幂']
         self.test_ids = [self.w_2_idx[word] for word in words]
 
         self.build_graph()
@@ -154,7 +154,6 @@ class word2vec(object):
         _, loss_val = self.sess.run([self.optimizer, self.loss], feed_dict=feed_dict)
         self.loss_records.append(loss_val)
 
-        self.num_sentences += len(raw_input)
         self.num_steps += 1
 
         if self.num_steps % self.max_len == 0:
@@ -203,7 +202,7 @@ class word2vec(object):
         var_names = ['vocab_size',
                      'embedding_size',
                      'batch_size',
-                     'skip_windows',
+                     'skip_window',
                      'learning_rate',
                      'num_sampled',
                      'train_steps']
@@ -256,7 +255,7 @@ w2v = word2vec(file_path='1.csv',
                skip_window=2,
                learning_rate=0.1,
                num_sampled=100,
-               train_steps=200000,
+               train_steps=6000,
                segmentation=True)
 
 final_embeddings = w2v.run_epoch()

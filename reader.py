@@ -36,7 +36,7 @@ def read_data(file_path, sw_path=None, segmentation=True):
         id = headers.index('content')
 
         reviews = list()  # A list of reviews
-        if sw_path:
+        if sw_path is not None:
             sw = _stop_words(sw_path)
         words = list()  # A list of all the words from reviews
         for line in incsv:
