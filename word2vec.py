@@ -3,13 +3,14 @@ import collections
 import math
 import time
 import os
+import random
 
 import tensorflow as tf
 import numpy as np
 
 from reader import build_dataset
 
-# Only show warning and error
+# Show warnings and errors only
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 """
@@ -64,6 +65,11 @@ class word2vec(object):
         self.num_steps = 0
         self.num_sentences = 0
 
+        # test data
+        # words, _ = zip(*random.sample(self.count, 10))
+        words = ['烂', '影片', '恶心', '难看', '杨幂']
+        self.test_ids = [self.w_2_idx[word] for word in words]
+
         self.build_graph()
         self.initializer()
 
@@ -73,7 +79,9 @@ class word2vec(object):
             self.train_inputs = tf.placeholder(tf.int32, shape=[None])
             self.train_labels = tf.placeholder(tf.int32, shape=[None, 1])
 
-            self.embeddings = tf.Variable(tf.random_uniform([self.vocab_size, self.embedding_size], -1.0, 1.0))
+            self.embeddings = tf.Variable(tf.random_uniform([min(len(self.count), self.vocab_size),
+                                                             self.embedding_size],
+                                                            -1.0, 1.0))
             embed = tf.nn.embedding_lookup(self.embeddings, self.train_inputs)
 
             # NCE parameters
@@ -92,6 +100,14 @@ class word2vec(object):
 
             # Gradient descent to update loss and embeddings
             self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
+
+            # Compute the cosine similarity between test examples and all embeddings
+            # L2 normalization
+            norm = tf.sqrt(tf.reduce_sum(tf.square(self.embeddings), 1, keep_dims=True))
+            self.normalized_embeddings = self.embeddings / norm
+            self.test_samples = tf.placeholder(tf.int32, shape=[None])
+            valid_embeddings = tf.nn.embedding_lookup(self.normalized_embeddings, self.test_samples)
+            self.similarity = tf.matmul(valid_embeddings, self.normalized_embeddings, transpose_b=True)
 
             # Initialization
             self.init = tf.global_variables_initializer()
@@ -137,6 +153,21 @@ class word2vec(object):
             average_loss = np.mean(self.loss_records)
             print('Average loss at step', self.num_steps, ': ', average_loss)
 
+        if self.num_steps % 2000 == 0:
+            self.cal_similarity()
+
+    def cal_similarity(self):
+        top_k = 10
+        sim = self.sess.run(self.similarity, feed_dict={self.test_samples: self.test_ids})
+        for i in range(len(self.test_ids)):
+            valid_word = self.idx_2_w[self.test_ids[i]]
+            nearest = (-sim[i, :]).argsort()[1:top_k + 1]
+            log_str = 'Nearest to %s:' % valid_word
+            for j in range(top_k):
+                close_word = self.idx_2_w[nearest[j]]
+                log_str = '%s %s,' % (log_str, close_word)
+            print(log_str)
+
     def run_epoch(self):
         index = 0
         print('Start training ...')
@@ -150,6 +181,7 @@ class word2vec(object):
             self.train(raw_input=raw_input)
         end = time.time()
         print('Run time: ', end - start)
+
 
 # loss: 7.70
 config_1 = {'batch_size': 1, 'train_steps': 100000}
