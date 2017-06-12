@@ -4,6 +4,8 @@ import collections
 import re
 import sys
 import time
+import os
+import json
 
 import jieba
 
@@ -41,7 +43,7 @@ def read_data(file_path, sw_path=None, segmentation=True):
         words = list()  # A list of all the words from reviews
         for line in incsv:
             sent = _tradition_2_simple(line[id].strip())  # Convert traditional chinese to simplified chinese
-            if sw_path:
+            if sw_path is not None:
                 sent = _clean_data(sent, sw)  # Delete special characters using custom dictionary
 
             if len(sent) <= 1:
@@ -62,13 +64,14 @@ def read_data(file_path, sw_path=None, segmentation=True):
 Build dataset for later usage
     Args
         n_words: vocabulary size
+        save_path: save mapping result
     Return
         data: A list of sentences consisted of indices
         count: A list of (word, count) pairs
         w_2_idx: Words to indices
         idx_2_w: Indices to words
 """
-def build_dataset(file_path, sw_path, segmentation=True, n_words=20000):
+def build_dataset(file_path, sw_path, save_path, segmentation=True, n_words=20000):
     start = time.time()
     print('Building dataset ...')
 
@@ -95,6 +98,8 @@ def build_dataset(file_path, sw_path, segmentation=True, n_words=20000):
                 UNK_count += 1
         data.append(temp)
     count[0][1] = UNK_count
+    count[0] = tuple(count[0])
+    count = sorted(count, key=lambda x: -x[1])
 
     end = time.time()
     runtime = end - start
@@ -110,7 +115,52 @@ def build_dataset(file_path, sw_path, segmentation=True, n_words=20000):
     print('Indices to words: ', sorted(idx_2_w.items(), key=lambda x: x[0])[:5])
     print('-------------------------------------------')
 
-    return data, count, w_2_idx, idx_2_w
+    if os.path.isfile(save_path):
+        raise RuntimeError('the save path should be a dir')
+    if not os.path.exists(save_path):
+        os.mkdir(save_path)
+
+    map_path = os.path.join(save_path, 'maps.txt')
+    with open(map_path, 'w', encoding='utf-8') as outf:
+        for idx in sorted(idx_2_w.items(), key=lambda x: x[0]):
+            outstr = '{}\t{}'.format(idx_2_w[idx[0]], idx[0])
+            outf.write(outstr)
+            outf.write('\n')
+
+    data_path = os.path.join(save_path, 'data.txt')
+    with open(data_path, 'w', encoding='utf-8') as outf:
+        for item in data:
+            outf.write(json.dumps(item))
+            outf.write('\n')
+
+    print('Data files has been successfully created')
+
+    return data, w_2_idx, idx_2_w, count
+
+
+def load_data(data_path):
+    map_path = os.path.join(data_path, 'maps.txt')
+    data_path = os.path.join(data_path, 'data.txt')
+
+    if not (os.path.exists(map_path) and os.path.exists(data_path)):
+        raise RuntimeError('Files not exist')
+
+    with open(map_path, 'r', encoding='utf-8') as mapf:
+        w_2_idx = {}
+        idx_2_w = {}
+        for line in mapf:
+            word, idx = line.split('\t')
+            w_2_idx[word] = int(idx)
+            idx_2_w[int(idx)] = word
+
+    with open(data_path, 'r', encoding='utf-8') as dataf:
+        data = []
+        for line in dataf:
+            sent = json.loads(line)
+            data.append(sent)
+
+    return data, w_2_idx, idx_2_w
+
 
 # --------------- Private Methods ---------------
 

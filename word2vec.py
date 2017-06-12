@@ -30,8 +30,9 @@ Implement skip gram word2vec
 """
 class word2vec(object):
     def __init__(self,
-                 file_path,  # str
-                 sw_path=None,  # str
+                 data,  # list
+                 w_2_idx,  # dictionary
+                 idx_2_w,  # dictionary
                  model_path=None,  # str
                  vocab_size=30000,  # int
                  embedding_size=200,  # int
@@ -40,12 +41,18 @@ class word2vec(object):
                  learning_rate=0.1,  # float
                  num_sampled=100,  # int
                  train_steps=100000,  # int
-                 segmentation=True  # boolean
                  ):
-        # Parameters
+
         if model_path is not None:
             self.load_model(model_path)
         else:
+            # Data
+            assert type(data) == list
+            self.data = data
+            self.w_2_idx = w_2_idx
+            self.idx_2_w = idx_2_w
+
+            # Parameters
             self.embedding_size = embedding_size
             self.skip_window = skip_window
             self.learning_rate = learning_rate
@@ -54,20 +61,8 @@ class word2vec(object):
             self.train_steps = train_steps
             self.batch_size = batch_size
 
-        # data: sentences represented by word indices
-        # count: word counts
-        # w_2_idx: word to index
-        # idx_2_w: index to word
-        if not os.path.exists(file_path):
-            raise RuntimeError('file not exists')
-
-        self.data, self.count, self.w_2_idx, self.idx_2_w = build_dataset(file_path,
-                                                                          sw_path,
-                                                                          segmentation=segmentation,
-                                                                          n_words=self.vocab_size)
-
         # Update vocabulary size
-        self.vocab_size = min(self.vocab_size, len(self.count))
+        self.vocab_size = min(self.vocab_size, len(self.w_2_idx.keys()))
 
         # train records
         self.max_len = 1000
@@ -75,9 +70,9 @@ class word2vec(object):
         self.num_steps = 0
 
         # test data
-        words, _ = zip(*random.sample(self.count, 10))
         # words = ['烂', '影片', '恶心', '难看', '杨幂']
-        self.test_ids = [self.w_2_idx[word] for word in words]
+        # self.test_ids = [self.w_2_idx[word] for word in words]
+        self.test_ids = random.sample(list(w_2_idx.values()), 10)
 
         self.build_graph()
         self.initializer()
@@ -88,7 +83,8 @@ class word2vec(object):
             self.train_inputs = tf.placeholder(tf.int32, shape=[None])
             self.train_labels = tf.placeholder(tf.int32, shape=[None, 1])
 
-            self.embeddings = tf.Variable(tf.random_uniform([self.vocab_size, self.embedding_size], -1.0, 1.0))
+            self.embeddings = tf.Variable(tf.random_uniform([self.vocab_size, self.embedding_size], -1.0, 1.0),
+                                          name='embeddings', dtype=tf.float32)
             embed = tf.nn.embedding_lookup(self.embeddings, self.train_inputs)
 
             # NCE parameters
@@ -110,7 +106,7 @@ class word2vec(object):
 
             # Compute the cosine similarity between test examples and all embeddings
             # L2 normalization
-            norm = tf.sqrt(tf.reduce_sum(tf.square(self.embeddings), 1, keep_dims=True))
+            norm = tf.sqrt(tf.reduce_sum(tf.square(self.embeddings), 1, keep_dims=True), name='norm')
             self.normalized_embeddings = self.embeddings / norm
             self.test_samples = tf.placeholder(tf.int32, shape=[None])
             valid_embeddings = tf.nn.embedding_lookup(self.normalized_embeddings, self.test_samples)
@@ -160,7 +156,7 @@ class word2vec(object):
             self.average_loss = np.mean(self.loss_records)
             print('Average loss at step', self.num_steps, ': ', self.average_loss)
 
-        if self.num_steps % 2000 == 0:
+        if self.num_steps % 5000 == 0:
             self.cal_similarity()
 
     def cal_similarity(self):
@@ -236,28 +232,24 @@ class word2vec(object):
             self.num_sampled = model['num_sampled']
             self.train_steps = model['train_steps']
 
-# loss: 7.70
-config_1 = {'batch_size': 1, 'train_steps': 100000}
-# loss: 7.42
-config_2 = {'batch_size': 5, 'train_steps': 100000}
-# loss: 6.93
-config_2 = {'batch_size': 10, 'train_steps': 100000}
-# loss: 6.98
-config_3 = {'batch_size': 20, 'train_steps': 100000}
-# loss: 5.36
-config_4 = {'batch_size': 10, 'train_steps': 200000}
 
-w2v = word2vec(file_path='1.csv',
-               sw_path='stop_words.txt',
-               vocab_size=30000,
-               embedding_size=200,
-               batch_size=10,
-               skip_window=2,
-               learning_rate=0.1,
-               num_sampled=100,
-               train_steps=6000,
-               segmentation=True)
+if __name__ == '__main__':
+    # Load data
+    data, w_2_idx, idx_2_w, _ = build_dataset('1.csv', 'stop_words.txt', 'data', segmentation=True, n_words=30000)
+    # Train word2vec
+    # Loss: 4.85
+    w2v = word2vec(data,
+                   w_2_idx,
+                   idx_2_w,
+                   vocab_size=30000,
+                   embedding_size=200,
+                   batch_size=10,
+                   skip_window=2,
+                   learning_rate=0.1,
+                   num_sampled=100,
+                   train_steps=300000)
 
-final_embeddings = w2v.run_epoch()
-print(final_embeddings.shape)
-w2v.save_model(save_path='model')
+    final_embeddings = w2v.run_epoch()
+    print('Embedding shape: ', final_embeddings.shape)
+    print(final_embeddings)
+    w2v.save_model(save_path='model')
