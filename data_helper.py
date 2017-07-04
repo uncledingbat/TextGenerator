@@ -92,6 +92,7 @@ def load_data(file_path, sw_path, level=2, vocab_size=0, language='ch', shuffle=
                 temp.append(w_2_idx['<UNK>'])
         temp.append(w_2_idx['<END>'])
         data.append(temp)
+    # data = sorted(data, key=lambda x: len(x))
 
     data_size = len(data)
     if shuffle:
@@ -126,7 +127,7 @@ def batch_iter(data, w_2_idx, batch_size, num_epochs):
             ydata = np.copy(xdata)
             ydata[:, :-1] = xdata[:, 1:]
 
-            yield(xdata, ydata)
+            yield (xdata, ydata)
 
 
 # Private methods
