@@ -16,8 +16,9 @@ class rnn_lm(object):
         self.learning_rate = config.learning_rate
 
         self.input_x = tf.placeholder(dtype=tf.int32, shape=[self.batch_size, None])
-        self.input_y = tf.placeholder(dtype=tf.int64, shape=[self.batch_size, None])
         self.keep_prob = tf.placeholder(dtype=tf.float32, shape=[])
+        if is_training:
+            self.input_y = tf.placeholder(dtype=tf.int64, shape=[self.batch_size, None])
 
         # L2 loss
         self.l2_loss = tf.constant(0.0)
@@ -31,9 +32,9 @@ class rnn_lm(object):
         cell = tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=self.keep_prob)
 
         # Stacked LSTMs
-        cell = tf.contrib.rnn.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
+        self.cell = tf.contrib.rnn.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
 
-        self._initial_state = cell.zero_state(self.batch_size, dtype=tf.float32)
+        self.initial_state = self.cell.zero_state(self.batch_size, dtype=tf.float32)
 
         # Word embedding
         with tf.device('/cpu:0'), tf.name_scope('embedding'):
@@ -50,9 +51,9 @@ class rnn_lm(object):
 
         # Dynamic LSTM
         with tf.variable_scope('LSTM'):
-            outputs, state = tf.nn.dynamic_rnn(cell,
+            outputs, state = tf.nn.dynamic_rnn(self.cell,
                                                inputs=inputs,
-                                               initial_state=self._initial_state)
+                                               initial_state=self.initial_state)
 
         self.final_state = state
         output = tf.reshape(outputs, [-1, self.hidden_size])
@@ -67,8 +68,7 @@ class rnn_lm(object):
             self.l2_loss += tf.nn.l2_loss(softmax_b)
 
             self.logits = tf.matmul(output, softmax_w) + softmax_b
-            predictions = tf.nn.softmax(self.logits)
-            self.predictions = tf.argmax(predictions, 1)
+            self.predictions = tf.nn.softmax(self.logits)
 
         if not is_training:
             return
