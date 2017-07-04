@@ -51,7 +51,7 @@ if not os.path.exists(outdir):
 # Save flags to file
 params = FLAGS.__flags
 params_file = open(os.path.join(outdir, 'params.pkl'), 'wb')
-pkl.dump(params, params_file, True)
+pkl.dump(params, params_file)
 params_file.close()
 
 
@@ -71,8 +71,8 @@ FLAGS.vocab_size = len(w_2_idx)
 batches = data_helper.batch_iter(data, w_2_idx, FLAGS.batch_size, FLAGS.num_epochs)
 
 # Save vocabulary to file
-vocab_file = open(os.path.join(outdir, 'vocab'), 'w')
-json.dump(w_2_idx, vocab_file)
+vocab_file = open(os.path.join(outdir, 'vocab.pkl'), 'wb')
+pkl.dump(w_2_idx, vocab_file)
 vocab_file.close()
 
 # Train
